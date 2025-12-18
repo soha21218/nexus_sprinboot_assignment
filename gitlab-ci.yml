@@ -1,0 +1,70 @@
+stages:
+  - build
+  - package
+  - deploy
+
+build_app:
+  stage: build
+  image: maven:3.8.5-openjdk-17
+  script:
+    - echo "Cloning code..."
+    - git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
+    
+    - echo "Building JAR..."
+    - cd Devops-Orange/Toy0Store
+    - mvn clean package -DskipTests
+    
+    # Move JAR to a clean location for the next stage
+    - mkdir -p ../../target
+    - cp target/*.jar ../../target/app.jar
+  artifacts:
+    paths:
+      - target/app.jar
+    expire_in: 1 hour
+
+push_to_nexus:
+  stage: package
+  image: docker:latest
+  services:
+    - name: docker:dind
+      command: ["--insecure-registry=192.168.58.2:30387"]
+  script:
+    - docker login -u "admin" -p "admin123" 192.168.58.2:30387
+    - docker build -t 192.168.58.2:30387/spring-boot-app:latest .
+    - docker push 192.168.58.2:30387/spring-boot-app:latest
+
+
+deploy_dev:
+  stage: deploy
+  image: dtzar/helm-kubectl:latest
+  script:
+    - mkdir -p ~/.kube
+    - echo "PASTE_YOUR_BASE64_KUBECONFIG_STRING_HERE" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+
+    - git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
+    - helm upgrade --install spring-app ./Devops-Orange/Toy0Store/helm-chart \
+      --namespace dev \
+      --create-namespace \
+      --set image.repository=192.168.58.2:30387/spring-boot-app \
+      --set image.tag=latest
+  rules:
+    - when: manual
+
+deploy_test:
+  stage: deploy
+  image: dtzar/helm-kubectl:latest
+  script:
+    # Setup Kubeconfig
+    - mkdir -p ~/.kube
+    - echo "PASTE_YOUR_BASE64_KUBECONFIG_STRING_HERE" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+
+    - git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
+    - helm upgrade --install spring-app ./Devops-Orange/Toy0Store/helm-chart \
+      --namespace test \
+      --create-namespace \
+      --set image.repository=192.168.58.2:30387/spring-boot-app \
+      --set image.tag=latest
+  rules:
+    - when: manual

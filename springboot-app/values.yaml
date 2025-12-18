@@ -1,0 +1,16 @@
+image:
+  repository: nexus-service.build.svc.cluster.local:8081/springboot-app
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+database:
+  host: mysql-dev.dev.svc.cluster.local
+  name: toystore
+  user: sohayla
+  password: SWA@20038
