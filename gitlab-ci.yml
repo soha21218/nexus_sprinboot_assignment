@@ -5,12 +5,11 @@ stages:
 
 variables:
   APP_NAME: springboot-app
-  NEXUS_IP: 192.168.58.2   # minikube ip
-  NEXUS_PORT: "30387"           # Nexus Docker NodePort
+  NEXUS_IP: 192.168.58.2          # Minikube IP
+  NEXUS_PORT: "30387"             # Nexus Docker NodePort
   IMAGE_TAG: $CI_COMMIT_SHORT_SHA
   DOCKER_TLS_CERTDIR: ""
-
-###Maven Build Stage
+  
 maven-build:
   stage: build
   image: maven:3.9-eclipse-temurin-17
@@ -23,7 +22,6 @@ maven-build:
       - Devops-Orange/target/*.jar
     expire_in: 1 hour
 
-###Docker Build & Push to Nexus
 docker-build-push:
   stage: docker
   image: docker:25
@@ -38,27 +36,30 @@ docker-build-push:
     - docker tag $APP_NAME:$IMAGE_TAG $NEXUS_IP:$NEXUS_PORT/$APP_NAME:$IMAGE_TAG
     - docker push $NEXUS_IP:$NEXUS_PORT/$APP_NAME:$IMAGE_TAG
 
-###Manual Helm Deploy (Dev/Test)
-helm-deploy:
+helm-deploy-dev:
   stage: deploy
   image: alpine/helm:3.15.0
   when: manual
-
   variables:
-    ENV:
-      value: dev
-      options:
-        - dev
-        - test
-      description: "Choose target namespace"
-
+    ENV: dev
   script:
-    - echo "Deploying Spring Boot application to $ENV namespace"
-
+    - echo "Deploying to DEV namespace"
     - helm upgrade --install springboot-app helm/springboot-app \
-        --namespace $ENV \
+        --namespace dev \
         --create-namespace \
         --set image.repository=$NEXUS_IP:$NEXUS_PORT/$APP_NAME \
         --set image.tag=$IMAGE_TAG
 
-
+helm-deploy-test:
+  stage: deploy
+  image: alpine/helm:3.15.0
+  when: manual
+  variables:
+    ENV: test
+  script:
+    - echo "Deploying to TEST namespace"
+    - helm upgrade --install springboot-app helm/springboot-app \
+        --namespace test \
+        --create-namespace \
+        --set image.repository=$NEXUS_IP:$NEXUS_PORT/$APP_NAME \
+        --set image.tag=$IMAGE_TAG
