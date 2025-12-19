@@ -1,70 +1,64 @@
 stages:
   - build
-  - package
+  - docker
   - deploy
 
-build_app:
+variables:
+  APP_NAME: springboot-app
+  NEXUS_IP: 192.168.58.2   # minikube ip
+  NEXUS_PORT: "30387"           # Nexus Docker NodePort
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  DOCKER_TLS_CERTDIR: ""
+
+###Maven Build Stage
+maven-build:
   stage: build
-  image: maven:3.8.5-openjdk-17
+  image: maven:3.9-eclipse-temurin-17
   script:
-    - echo "Cloning code..."
     - git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
-    
-    - echo "Building JAR..."
-    - cd Devops-Orange/Toy0Store
+    - cd Devops-Orange
     - mvn clean package -DskipTests
-    
-    # Move JAR to a clean location for the next stage
-    - mkdir -p ../../target
-    - cp target/*.jar ../../target/app.jar
   artifacts:
     paths:
-      - target/app.jar
+      - Devops-Orange/target/*.jar
     expire_in: 1 hour
 
-push_to_nexus:
-  stage: package
-  image: docker:latest
+###Docker Build & Push to Nexus
+docker-build-push:
+  stage: docker
+  image: docker:25
   services:
-    - name: docker:dind
-      command: ["--insecure-registry=192.168.58.2:30387"]
+    - docker:25-dind
+  dependencies:
+    - maven-build
   script:
-    - docker login -u "admin" -p "admin123" 192.168.58.2:30387
-    - docker build -t 192.168.58.2:30387/spring-boot-app:latest .
-    - docker push 192.168.58.2:30387/spring-boot-app:latest
+    - cd Devops-Orange
+    - docker build -t $APP_NAME:$IMAGE_TAG .
+    - docker login $NEXUS_IP:$NEXUS_PORT -u admin -p admin123
+    - docker tag $APP_NAME:$IMAGE_TAG $NEXUS_IP:$NEXUS_PORT/$APP_NAME:$IMAGE_TAG
+    - docker push $NEXUS_IP:$NEXUS_PORT/$APP_NAME:$IMAGE_TAG
 
-
-deploy_dev:
+###Manual Helm Deploy (Dev/Test)
+helm-deploy:
   stage: deploy
-  image: dtzar/helm-kubectl:latest
+  image: alpine/helm:3.15.0
+  when: manual
+
+  variables:
+    ENV:
+      value: dev
+      options:
+        - dev
+        - test
+      description: "Choose target namespace"
+
   script:
-    - mkdir -p ~/.kube
-    - echo "PASTE_YOUR_BASE64_KUBECONFIG_STRING_HERE" | base64 -d > ~/.kube/config
-    - chmod 600 ~/.kube/config
+    - echo "Deploying Spring Boot application to $ENV namespace"
 
-    - git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
-    - helm upgrade --install spring-app ./Devops-Orange/Toy0Store/helm-chart \
-      --namespace dev \
-      --create-namespace \
-      --set image.repository=192.168.58.2:30387/spring-boot-app \
-      --set image.tag=latest
-  rules:
-    - when: manual
+    - helm upgrade --install springboot-app helm/springboot-app \
+        --namespace $ENV \
+        --create-namespace \
+        --set image.repository=$NEXUS_IP:$NEXUS_PORT/$APP_NAME \
+        --set image.tag=$IMAGE_TAG
 
-deploy_test:
-  stage: deploy
-  image: dtzar/helm-kubectl:latest
-  script:
-    # Setup Kubeconfig
-    - mkdir -p ~/.kube
-    - echo "PASTE_YOUR_BASE64_KUBECONFIG_STRING_HERE" | base64 -d > ~/.kube/config
-    - chmod 600 ~/.kube/config
 
-    - git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
-    - helm upgrade --install spring-app ./Devops-Orange/Toy0Store/helm-chart \
-      --namespace test \
-      --create-namespace \
-      --set image.repository=192.168.58.2:30387/spring-boot-app \
-      --set image.tag=latest
-  rules:
-    - when: manual
