@@ -2,31 +2,27 @@
   hosts: minikube
 
   tasks:
-
-    ##Make sure that the pod is up and worrking...
     - name: Wait for Nexus Pod...
       kubernetes.core.k8s_info:
         kind: Pod
         namespace: build
         label_selectors:
           - app=nexus
-      register: nexus_pods ##Save all the information about the Nexus pods
+      register: nexus_pods 
       failed_when: false
       until: >
         (nexus_pods.resources | default([]) | length) > 0 and
         (nexus_pods.resources | default([]))[0].status.phase == "Running"
       retries: 10
       delay: 5
-
-    ##Finding the network address of nexus...
+      
     - name: Get Nexus Service NodePort
       kubernetes.core.k8s_info:
         kind: Service
         namespace: build
         name: nexus-service
-      register: nexus_service ##Save the result of this task as a variable called ""nexus_service"" so It can used later.
+      register: nexus_service
 
-    ##Print the URL that open Nexus...
     - name: Print Nexus access URL
       debug:
         msg: >
