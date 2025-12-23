@@ -222,28 +222,19 @@ all:
           http://{{ lookup('pipe', 'minikube ip') }}:{{ nexus_service.resources[0].spec.ports[0].nodePort }}
 
 you should see after running playbook successfly:
+ok: [minikube] => { "msg": "Nexus is running at: http://192.168.58.2:30387\n" }
 
-*
-ok: [minikube] => {
-    "msg": "Nexus is running at: http://192.168.49.2:32430\n"
-}
-source venv_ansible/bin/activate
+(Optional) source venv_ansible/bin/activate
 ansible-playbook -i hosts.yml nexus_setup.yml
 
-192.168.58.2:30387
-192.168.58.2
-
-
-but note that 192.168.49.2 is the internal Minikube VM IP.
-cantbe loaded through a browser
-
-use curl http://192.168.49.2:32430 to know if it working if it returns an output then it is okay...
+but note that 192.168.58.2 is the internal Minikube VM IP.
+can't be loaded through a browser, use curl http://192.168.58.2:30387 to know if working if it returns an output then it is okay...
  
 
 ---
 Deploy on minikube Dev and Test namespaces MySQL DB using Helm and You should import/execute the DB scripts in Github repository above.
 
-make sure that created namespace of  dev and test are there by
+###Make sure that created namespace of  dev and test are there by
 kubectl get ns
 
 ###check helm version
@@ -253,165 +244,153 @@ helm version
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm repo update
 
-
 ###Deploy MySQL in Dev namespace
- helm install mysql-dev bitnami/mysql \
-        --namespace dev \
-        --set auth.rootPassword="SWA@20038" \
-        --set auth.database="demo" \
-        --set auth.username="sohayla" \
-        --set auth.password="SWA@20038" \
-        --set primary.persistence.size=1Gi \
-        --set image.repository="bitnamilegacy/mysql" \
-        --set image.tag="8.4.5-debian-12-r0"
+ helm install mysql-dev bitnami/mysql --namespace dev --set auth.rootPassword="SWA@20038" --set auth.database="demo" --set auth.username="sohayla" --set auth.password="SWA@20038" --set primary.persistence.size=1Gi --set image.repository="bitnamilegacy/mysql" --set image.tag="8.4.5-debian-12-r0"
 ###Deploy MySQL in test namespace
- helm install mysql-test bitnami/mysql \
-        --namespace test \
-        --set auth.rootPassword="SWA@20038" \
-        --set auth.database="demo" \
-        --set auth.username="sohayla" \
-        --set auth.password="SWA@20038" \
-        --set primary.persistence.size=1Gi \
-        --set image.repository="bitnamilegacy/mysql" \
-        --set image.tag="8.4.5-debian-12-r0"
+ helm install mysql-test bitnami/mysql  --namespace test --set auth.rootPassword="SWA@20038" --set auth.database="demo" --set auth.username="sohayla" --set auth.password="SWA@20038" --set primary.persistence.size=1Gi --set image.repository="bitnamilegacy/mysql" --set image.tag="8.4.5-debian-12-r0"
 
-###Verify that pods are running
-kubectl get pods -n dev
-kubectl get pods -n test
+###Verify that pods are running(Optional)
+kubectl get pods -n dev && kubectl get pods -n test
 
-###port forwarding(optional)
+###Port forwarding(optional)
 kubectl -n dev port-forward svc/mysql-dev 3306:3306
 kubectl -n test port-forward svc/mysql-test 3306:3306
 
 ###Cloning GitHub repo into my machine
 git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
-cd Devops-orange
-cd Database
+cd Devops-orange && cd Database
 
 kubectl -n dev exec -i $(kubectl -n dev get pod -l app.kubernetes.io/instance=mysql-dev -o jsonpath="{.items[0].metadata.name}") -- mysql -uroot -p"SWA@20038" -e "CREATE DATABASE IF NOT EXISTS toystore;"
-
 kubectl -n dev exec -i $(kubectl -n dev get pod -l app.kubernetes.io/instance=mysql-dev -o jsonpath="{.items[0].metadata.name}") -- mysql -uroot -p"SWA@20038" toystore < toystore-test.sql
 
 kubectl -n test exec -i $(kubectl -n test get pod -l app.kubernetes.io/instance=mysql-test -o jsonpath="{.items[0].metadata.name}") -- mysql -uroot -p"SWA@20038" -e "CREATE DATABASE IF NOT EXISTS toystore;"
-
-
 kubectl -n test exec -i $(kubectl -n test get pod -l app.kubernetes.io/instance=mysql-test -o jsonpath="{.items[0].metadata.name}") -- mysql -uroot -p"SWA@20038" toystore < toystore-test.sql
 
 ###Exec into your MySQL pod and connect to the database
-
 kubectl -n dev exec -it $(kubectl -n dev get pod -l app.kubernetes.io/instance=mysql-dev -o jsonpath="{.items[0].metadata.name}") -- mysql -uroot -p"SWA@20038" toystore
 kubectl -n test exec -it $(kubectl -n test get pod -l app.kubernetes.io/instance=mysql-test -o jsonpath="{.items[0].metadata.name}") -- mysql -uroot -p"SWA@20038" toystore
-SHOW TABLES;
+when the sql> show up , write "SHOW TABLES;" to check that everything id okay.
 
 
 Create helm chart for Spring Boot application to be used in gitlab pipeline deployment, Configurations of micro-services should be handled using Config maps or secrets in K8s.
 
 ###Create a helm chart for spring boot application
 helm create springboot-app
-
+th ouptut strucute will be:
+springboot-app/
+├── Chart.yaml
+├── values.yaml
+└── templates/
+    ├── _helpers.tpl
+    ├── deployment.yaml
+    ├── service.yaml
+    ├── ingress.yaml
+    ├── hpa.yaml
+    ├── serviceaccount.yaml
+    └── NOTES.txt
+(Optional) Delete unwanted files like hpa.yaml , NOTES.txt , _helpers.tpl, ...
 ###Chart.yaml
-apiVersion: v2
-name: springboot-app
-description: Spring Boot application deployed via Helm
-type: application
-version: 0.1.0
-appVersion: "1.0"
+  apiVersion: v2
+  name: springboot-app
+  description: Spring Boot application deployed via Helm
+  type: application
+  version: 0.1.0
+  appVersion: "1.0"
 
 ###values.yaml
-image:
-  repository: nexus-service.build.svc.cluster.local:8081/springboot-app
-  tag: latest
-  pullPolicy: IfNotPresent
-replicaCount: 1
-service:
-  type: ClusterIP
-  port: 8080
-database:
-  host: mysql-dev.dev.svc.cluster.local
-  name: toystore
-  user: sohayla
-  password: SWA@20038
+  image:
+    repository: nexus-service.build.svc.cluster.local:8081/springboot-app
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8080
+  database:
+    host: mysql-dev.dev.svc.cluster.local
+    name: toystore
+    user: sohayla
+    password: SWA@20038
 
-IN templates DIR:
+
 ###deployment.yaml
-
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ .Release.Name }}
-spec:
-  replicas: {{ .Values.replicaCount }}
-  selector:
-    matchLabels:
-      app: {{ .Release.Name }}
-  template:
-    metadata:
-      labels:
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: {{ .Release.Name }}
+  spec:
+    replicas: {{ .Values.replicaCount }}
+    selector:
+      matchLabels:
         app: {{ .Release.Name }}
-    spec:
-      containers:
-        - name: springboot-app
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - containerPort: 8080
-          env:
-            - name: SPRING_CONFIG_LOCATION
-              value: /config/application.yml
-            - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-secret
-                  key: DB_PASSWORD
-          volumeMounts:
-            - name: config-volume
-              mountPath: /config
-      volumes:
-        - name: config-volume
-          configMap:
-            name: {{ .Release.Name }}-config
-###service.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ .Release.Name }}
-spec:
-  type: {{ .Values.service.type }}
-  selector:
-    app: {{ .Release.Name }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: 8080
+    template:
+      metadata:
+        labels:
+          app: {{ .Release.Name }}
+      spec:
+        containers:
+          - name: springboot-app
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            ports:
+              - containerPort: 8080
+            env:
+              - name: SPRING_CONFIG_LOCATION
+                value: /config/application.yml
+              - name: SPRING_DATASOURCE_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ .Release.Name }}-secret
+                    key: DB_PASSWORD
+            volumeMounts:
+              - name: config-volume
+                mountPath: /config
+        volumes:
+          - name: config-volume
+            configMap:
+              name: {{ .Release.Name }}-config
 
+###service.yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: {{ .Release.Name }}
+  spec:
+    type: {{ .Values.service.type }}
+    selector:
+      app: {{ .Release.Name }}
+    ports:
+      - port: {{ .Values.service.port }}
+        targetPort: 8080
+  
 ###secret.yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ .Release.Name }}-secret
-type: Opaque
-stringData:
-  DB_PASSWORD: {{ .Values.database.password }}
+  apiVersion: v1
+  kind: Secret
+  metadata:
+    name: {{ .Release.Name }}-secret
+  type: Opaque
+  stringData:
+    DB_PASSWORD: {{ .Values.database.password }}
 
 ###configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ .Release.Name }}-config
-data:
-  application.yml: |
-    server:
-      port: 8080
-    spring:
-      datasource:
-        url: jdbc:mysql://{{ .Values.database.host }}:3306/{{ .Values.database.name }}
-        username: {{ .Values.database.user }}
-      jpa:
-        hibernate:
-          ddl-auto: none
-        show-sql: true
+  apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: {{ .Release.Name }}-config
+  data:
+    application.yml: |
+      server:
+        port: 8080
+      spring:
+        datasource:
+          url: jdbc:mysql://{{ .Values.database.host }}:3306/{{ .Values.database.name }}
+          username: {{ .Values.database.user }}
+        jpa:
+          hibernate:
+            ddl-auto: none
+          show-sql: true
 Create a Gitlab pipeline to do the following: 
-Create another GitLab pipeline job that would allow user to first choose either Dev or Test 
-namespaces. 
+Create another GitLab pipeline job that would allow user to first choose either Dev or Test namespaces. 
 
 ###Dockerfile
 FROM eclipse-temurin:17-jre
@@ -423,60 +402,76 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 ###.gitlab-ci.yaml
 stages:
   - build
-  - docker
+  - package
   - deploy
 
-variables:
-  APP_NAME: springboot-app
-  NEXUS_IP: 192.168.58.2   # minikube ip
-  NEXUS_PORT: "30387"      # Nexus Docker NodePort
-  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
-  DOCKER_TLS_CERTDIR: ""
-
-# -------------------------
-# Maven Build Stage
-# -------------------------
-maven-build:
+build_app:
   stage: build
-  image: maven:3.9-eclipse-temurin-17
+  image: maven:3.8.5-openjdk-17
   script:
+    - echo "Cloning code..."
     - git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
-    - cd Devops-Orange
+
+    - echo "Building JAR..."
+    - cd Devops-Orange/Toy0Store
     - mvn clean package -DskipTests
+
+    # Move JAR to a clean location for the next stage
+    - mkdir -p ../../target
+    - cp target/*.jar ../../target/app.jar
+
   artifacts:
     paths:
-      - Devops-Orange/target/*.jar
+      - target/app.jar
     expire_in: 1 hour
 
-# -------------------------
-# Docker Build & Push to Nexus
-# -------------------------
-docker-build-push:
-  stage: docker
-  image: docker:25
+push_to_nexus:
+  stage: package
+  image: docker:24.0.7
   services:
-    - docker:25-dind
-  dependencies:
-    - maven-build
+    - name: docker:24.0.7-dind
+      command:
+        - "--insecure-registry=192.168.58.2:30387"
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   script:
-    - cd Devops-Orange
-    - docker build -t $APP_NAME:$IMAGE_TAG .
-    - docker login $NEXUS_IP:$NEXUS_PORT -u admin -p admin123
-    - docker tag $APP_NAME:$IMAGE_TAG $NEXUS_IP:$NEXUS_PORT/$APP_NAME:$IMAGE_TAG
-    - docker push $NEXUS_IP:$NEXUS_PORT/$APP_NAME:$IMAGE_TAG
+    - docker info
+    - echo "admin123" | docker login 192.168.58.2:30387 -u admin --password-stdin
+    - docker build -t 192.168.58.2:30387/spring-boot-app:latest .
+    - docker push 192.168.58.2:30387/spring-boot-app:latest
 
-# -------------------------
-# Manual Helm Deploy
-# -------------------------
-helm-deploy:
+deploy_dev:
   stage: deploy
-  image: alpine/helm:3.15.0
-  when: manual
-  # ENV variable must be set manually when triggering the job
+  image: dtzar/helm-kubectl:latest
   script:
-    - echo "Deploying Spring Boot application to $ENV namespace"
-    - helm upgrade --install $APP_NAME helm/springboot-app \
-        --namespace $ENV \
+    - mkdir -p ~/.kube
+    - echo "PASTE_YOUR_BASE64_KUBECONFIG_STRING_HERE" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+
+    - git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
+    - helm upgrade --install spring-app ./Devops-Orange/Toy0Store/helm-chart \
+        --namespace dev \
         --create-namespace \
-        --set image.repository=$NEXUS_IP:$NEXUS_PORT/$APP_NAME \
-        --set image.tag=$IMAGE_TAG
+        --set image.repository=192.168.58.2:30387/spring-boot-app \
+        --set image.tag=latest
+  rules:
+    - when: manual
+
+deploy_test:
+  stage: deploy
+  image: dtzar/helm-kubectl:latest
+  script:
+    - mkdir -p ~/.kube
+    - echo "PASTE_YOUR_BASE64_KUBECONFIG_STRING_HERE" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+
+    - git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
+    - helm upgrade --install spring-app ./Devops-Orange/Toy0Store/helm-chart \
+        --namespace test \
+        --create-namespace \
+        --set image.repository=192.168.58.2:30387/spring-boot-app \
+        --set image.tag=latest
+  rules:
+    - when: manual
+
