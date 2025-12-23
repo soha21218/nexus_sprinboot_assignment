@@ -1,57 +1,57 @@
 Install local K8s instance using minikube.
 ###Install Docker CE:
->> sudo apt install -y docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin
+sudo apt install -y docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin
 
 ###Start and enable docker
->> sudo systemctl enable --now docker
+sudo systemctl enable --now docker
 
 ###Verify docker(OPTIONAL)
->> docker --version
->> sudo docker run hello-world
+docker --version
+sudo docker run hello-world
 
 ###Run docker without sudo
->> sudo usermod -aG docker $USER
->> newgrp docker
+sudo usermod -aG docker $USER
+newgrp docker
 
 ###Insatll minikube
->> curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
->> chmod +x minikube-linux-amd64
->> sudo mv minikube-linux-amd64 /usr/local/bin/minikube
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+chmod +x minikube-linux-amd64
+sudo mv minikube-linux-amd64 /usr/local/bin/minikube
 
 ###start minikube
->> minikube start --driver=docker --memory=4000 --cpus=2
+minikube start --driver=docker --memory=4000 --cpus=2
 minikube start --driver=docker --memory=4096 --cpus=2 --apiserver-ips=127.0.0.1 --kubernetes-version=stable
 
 
 
 ###Verify
->> kubectl get nodes
+kubectl get nodes
 
 K8s instance will have three Namespaces: Build, Dev and Test.
 ###Creating namespace
->> kubectl create namespace build
->> kubectl create namespace dev
->> kubectl create namespace test
+kubectl create namespace build
+kubectl create namespace dev
+kubectl create namespace test
 
 ###verify that namespaces exists
->> kubectl get namespaces
+kubectl get namespaces
 
 Install local GitLab instance using docker compose.
 
 ###Verify(OPTIONAL)
->> docker --version
->> docker compose version
+docker --version
+docker compose version
 
 ###Create GitLab Directory Structure
->> mkdir GitLab && cd gitlab
+mkdir GitLab && cd gitlab
 
 ###Creating a docker compose yaml file
 nano docker-compose.yml
 Write
 services:
-**  gitlab:
-**    image: gitlab/gitlab-ce:latest
-**    container_name: gitlab
+    gitlab:
+      image: gitlab/gitlab-ce:latest
+      container_name: gitlab
 **    restart: always
 **    hostname: gitlab.local
 **    environment:
@@ -480,7 +480,3 @@ helm-deploy:
         --create-namespace \
         --set image.repository=$NEXUS_IP:$NEXUS_PORT/$APP_NAME \
         --set image.tag=$IMAGE_TAG
-
-
-
-
