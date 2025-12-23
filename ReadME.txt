@@ -5,87 +5,83 @@ This guide explains how to set up a local Kubernetes environment using Minikube,
     Internet access
     sudo privileges
 
-1️⃣ Install Docker CE
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin
+###Install Docker CE
+    sudo apt update
+    sudo apt install -y docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin
 
 Start & Enable Docker
-sudo systemctl enable --now docker
+    sudo systemctl enable --now docker
 
 Verify Docker (Optional)
-docker --version
-sudo docker run hello-world
+    docker --version && sudo docker run hello-world
 
 Run Docker Without sudo
-sudo usermod -aG docker $USER
-newgrp docker
+    sudo usermod -aG docker $USER && newgrp docker
 
-2️⃣ Install Minikube (Local Kubernetes)
-curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-chmod +x minikube-linux-amd64
-sudo mv minikube-linux-amd64 /usr/local/bin/minikube
+###Install Minikube (Local Kubernetes)
+    curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+    chmod +x minikube-linux-amd64
+    sudo mv minikube-linux-amd64 /usr/local/bin/minikube
 
 Start Minikube
-minikube start --driver=docker
+    minikube start --driver=docker
 
 Verify Kubernetes
-kubectl get nodes
+    kubectl get nodes
 
-3️⃣ Create Kubernetes Namespaces
-kubectl create namespace build
-kubectl create namespace dev
-kubectl create namespace test
+###Create Kubernetes Namespaces
+    kubectl create namespace build
+    kubectl create namespace dev
+    kubectl create namespace test
 
 Verify
-kubectl get namespaces
+    kubectl get namespaces
 
-4️⃣ Install Local GitLab Using Docker Compose
+###Install Local GitLab Using Docker Compose
 Verify Docker Compose (Optional)
-docker --version
-docker compose version
+    docker --version
+    docker compose version
 
 Create Directory
-mkdir gitlab && cd gitlab
+    mkdir gitlab && cd gitlab
 
 docker-compose.yml
-services:
-  gitlab:
-    image: gitlab/gitlab-ce:latest
-    container_name: gitlab
-    restart: always
-    hostname: gitlab.local
-    environment:
-      GITLAB_OMNIBUS_CONFIG: |
-        external_url 'http://192.168.220.128:8088'
-        gitlab_rails['gitlab_shell_ssh_port'] = 2222
-    ports:
-      - "8088:8088"
-      - "2226:22"
-    volumes:
-      - ./config:/etc/gitlab
-      - ./logs:/var/log/gitlab
-      - ./data:/var/opt/gitlab
-    shm_size: '256m'
-    healthcheck:
-      disable: true
+    services:
+      gitlab:
+        image: gitlab/gitlab-ce:latest
+        container_name: gitlab
+        restart: always
+        hostname: gitlab.local
+        environment:
+          GITLAB_OMNIBUS_CONFIG: |
+            external_url 'http://192.168.220.128:8088'
+            gitlab_rails['gitlab_shell_ssh_port'] = 2222
+        ports:
+          - "8088:8088"
+          - "2226:22"
+        volumes:
+          - ./config:/etc/gitlab
+          - ./logs:/var/log/gitlab
+          - ./data:/var/opt/gitlab
+        shm_size: '256m'
+        healthcheck:
+          disable: true
 
-Run GitLab
-docker compose up -d
+Run GitLab: docker compose up -d
 
 Check Logs (Optional)
-docker logs -f gitlab
+    docker logs -f gitlab
 
 Get GitLab Root Password
 docker exec -it <container_id> /bin/bash
 cat /etc/gitlab/initial_root_password
-
 
 Login:
 URL: http://<VM-IP>:8088
 Username: root
 Password: from file above
 
-5️⃣ Deploy Nexus Repository OSS (Build Namespace)
+###Deploy Nexus Repository OSS (Build Namespace)
 Terraform Files
 providers.tf
 terraform {
@@ -102,72 +98,69 @@ provider "kubernetes" {
 }
 
 main.tf
-
-PVC → Persistent storage
-Deployment → Nexus Pod
-Service → NodePort access
-resource "kubernetes_persistent_volume_claim" "nexus_pvc" {   metadata {   name = "nexus-pvc"   namespace = "build" }   spec {   access_modes = ["ReadWriteOnce"]   resources {   requests = {   storage = "5Gi"   }}  }} #Nexus Deployment purpose: Runs Nexus in a Pod inside your cluster. resource "kubernetes_deployment" "nexus" {   metadata {   name = "nexus"   namespace = "build"   labels = { app = "nexus" }   }   spec {   replicas = 1   selector { match_labels = { app = "nexus" } }   template {   metadata {   labels = {   app = "nexus"   }}   spec {   container {   name = "nexus"   image = "sonatype/nexus3:latest"   ports { container_port = 8081 }   volume_mount {   name = "nexus-data"   mount_path = "/nexus-data"   }}   volume {   name = "nexus-data"   persistent_volume_claim {   claim_name = kubernetes_persistent_volume_claim.nexus_pvc.metadata[0].name   }}   }}   }} # Nexus Service purpose: Exposes the Nexus Pod so you can access it from outside the cluster. resource "kubernetes_service" "nexus" {   metadata {   name = "nexus-service"   namespace = "build"   }   spec {selector = { app = kubernetes_deployment.nexus.metadata[0].labels.app }   port {   port = 8081   target_port = 8081   }   type = "NodePort"   }}
-
+    PVC → Persistent storage
+    Deployment → Nexus Pod
+    Service → NodePort access
 
 Apply Terraform
-terraform init
-terraform plan
-terraform apply
+    terraform init
+    terraform plan
+    terraform apply
 
-6️⃣ Configure Nexus Using Ansible
-Inventory (hosts.yml)
-all:
-  hosts:
-    minikube:
-      ansible_connection: local
-      ansible_python_interpreter: /home/sohayla_218/technical_Assignment/ansible/venv_ansible/bin/python
+###Configure Nexus Using Ansible
+    Inventory (hosts.yml)
+    all:
+      hosts:
+        minikube:
+          ansible_connection: local
+          ansible_python_interpreter: /home/sohayla_218/technical_Assignment/ansible/venv_ansible/bin/python
 
 Playbook (nexus_setup.yml)
-Waits for Nexus Pod
-Fetches NodePort
-Prints Nexus URL
+    Waits for Nexus Pod
+    Fetches NodePort
+    Prints Nexus URL
 
 Run:
-source venv_ansible/bin/activate
-ansible-playbook -i hosts.yml nexus_setup.yml
+    source venv_ansible/bin/activate
+    ansible-playbook -i hosts.yml nexus_setup.yml
 
 one of the expected Output -> Nexus is running at: http://192.168.58.2:30387
 
 ⚠️ Note: Minikube IP is internal.
 Use: curl http://192.168.58.2:30387 -> to check if it running 
 
-7️⃣ Deploy MySQL Using Helm (Dev & Test)
+###Deploy MySQL Using Helm (Dev & Test)
 Add Helm Repo
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm repo update
 
 Deploy MySQL (Dev)
-helm install mysql-dev bitnami/mysql \
-  --namespace dev \
-  --set auth.rootPassword="SWA@20038" \
-  --set auth.database="demo" \
-  --set auth.username="sohayla" \
-  --set auth.password="SWA@20038" \
-  --set primary.persistence.size=1Gi \
-  --set image.repository="bitnamilegacy/mysql" \
-  --set image.tag="8.4.5-debian-12-r0"
+    helm install mysql-dev bitnami/mysql \
+      --namespace dev \
+      --set auth.rootPassword="SWA@20038" \
+      --set auth.database="demo" \
+      --set auth.username="sohayla" \
+      --set auth.password="SWA@20038" \
+      --set primary.persistence.size=1Gi \
+      --set image.repository="bitnamilegacy/mysql" \
+      --set image.tag="8.4.5-debian-12-r0"
 
 Deploy MySQL (Test)
-helm install mysql-test bitnami/mysql \
-  --namespace test \
-  --set auth.rootPassword="SWA@20038" \
-  --set auth.database="demo" \
-  --set auth.username="sohayla" \
-  --set auth.password="SWA@20038" \
-  --set primary.persistence.size=1Gi \
-  --set image.repository="bitnamilegacy/mysql" \
-  --set image.tag="8.4.5-debian-12-r0"
+    helm install mysql-test bitnami/mysql \
+      --namespace test \
+      --set auth.rootPassword="SWA@20038" \
+      --set auth.database="demo" \
+      --set auth.username="sohayla" \
+      --set auth.password="SWA@20038" \
+      --set primary.persistence.size=1Gi \
+      --set image.repository="bitnamilegacy/mysql" \
+      --set image.tag="8.4.5-debian-12-r0"
 
 Verify Pods
-kubectl get pods -n dev
-kubectl get pods -n test
+    kubectl get pods -n dev
+    kubectl get pods -n test
 
-8️⃣ Import Database Scripts
+###Import Database Scripts
 git clone https://github.com/ahmedmisbah-ole/Devops-Orange.git
 cd Devops-Orange/Database
 
@@ -182,7 +175,7 @@ kubectl -n dev exec -it $(kubectl -n dev get pod -l app.kubernetes.io/instance=m
 kubectl -n test exec -it $(kubectl -n test get pod -l app.kubernetes.io/instance=mysql-test -o jsonpath="{.items[0].metadata.name}") -- mysql -uroot -p"SWA@20038" toystore 
 when the sql> show up , write "SHOW TABLES;" 
 
-9️⃣ Create Helm Chart for Spring Boot
+###Create Helm Chart for Spring Boot
 helm create springboot-app
 
 Chart Structure
@@ -219,4 +212,5 @@ deploy_dev → manual
 deploy_test → manual
 
 User chooses environment from GitLab UI
+
 
